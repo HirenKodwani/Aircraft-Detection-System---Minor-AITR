@@ -259,7 +259,7 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"✅ Model: {MODEL_PATH}")
     print(f"✅ Confidence: {CONF_THRESHOLD}")
-    print(f"✅ Session: {engine.session_id}")
+    print(f"✅ Port: {port}")
     print(f"✅ URL: http://localhost:{port}")
     print("=" * 60 + "\n")
     
