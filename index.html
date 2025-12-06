@@ -356,14 +356,24 @@
         }
 
         // Initialize socket - auto-detect server URL for mobile/deployed compatibility
-        const socket = io();
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            rememberUpgrade: true
+        });
         let isDetecting = false;
         let stream = null;
         let frameInterval = null;
 
         socket.on('connect', () => {
+            console.log('[SOCKET] Connected successfully');
             document.getElementById('statusDot').classList.add('connected');
             document.getElementById('statusText').textContent = 'Connected';
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('[SOCKET] Connection error:', error);
+            document.getElementById('statusText').textContent = 'Connection Error';
         });
 
         socket.on('status', (data) => {
@@ -371,6 +381,7 @@
         });
 
         socket.on('disconnect', () => {
+            console.log('[SOCKET] Disconnected');
             document.getElementById('statusDot').classList.remove('connected');
             document.getElementById('statusText').textContent = 'Disconnected';
         });
@@ -548,3 +559,4 @@
 </body>
 
 </html>
+
