@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aircraft Detection - Demo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow-y: scroll;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a1f3a, #2d3748);
+            padding: 1.5rem 2rem;
+            border-bottom: 3px solid #00d4ff;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            text-align: center;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        .video-section {
+            background: #1a1f3a;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border: 2px solid #2d3748;
+            position: relative;
+        }
+
+        #liveFrame {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00d4ff, #7c3aed);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .btn.active {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .status-dot.connected {
+            background: #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+        }
+
+        .map-section {
+            background: #1a1f3a;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border: 2px solid #2d3748;
+        }
+
+        #map {
+            width: 100%;
+            height: 400px;
+            border-radius: 8px;
+        }
+
+        .aircraft-icon {
+            font-size: 20px;
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .detections-section {
+            background: #1a1f3a;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid #2d3748;
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            color: #00d4ff;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #000;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .detection-card {
+            background: linear-gradient(135deg, #2a2f4a, #1f2437);
+            padding: 1.2rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #00d4ff;
+            animation: slideIn 0.4s;
+        }
+
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .object-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .threat-badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .threat-medium {
+            background: #f59e0b;
+            color: #000;
+        }
+
+        .threat-high {
+            background: #ef4444;
+        }
+
+        .threat-critical {
+            background: #dc2626;
+            animation: blink 1s infinite;
+        }
+
+        .detection-info {
+            font-size: 0.9rem;
+            color: #9ca3af;
+            line-height: 1.6;
+        }
+
+        .verified {
+            color: #10b981;
+        }
+
+        .unverified {
+            color: #f59e0b;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>✈️ Aircraft Detection System - Live Demo</h1>
+    </div>
+
+    <div class="container">
+        <div class="video-section">
+            <img id="liveFrame" alt="Live Camera Feed with Detections">
+            <div class="controls">
+                <button id="startBtn" class="btn">Start Detection</button>
+                <div class="status">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Connecting...</span>
+                </div>
+                <span id="sessionInfo" style="font-size: 0.9rem; color: #9ca3af;"></span>
+            </div>
+        </div>
+
+        <div class="map-section">
+            <h3 style="color: #00d4ff; margin-bottom: 0.75rem;">📍 Location & Aircraft Tracking</h3>
+            <div id="map"></div>
+            <div id="gpsInfo" style="margin-top: 0.75rem; font-size: 0.9rem; color: #9ca3af;"></div>
+        </div>
+
+        <div class="detections-section">
+            <div class="section-title">
+                <span>🎯 Live Detections</span>
+                <span class="badge" id="detectionCount">0</span>
+            </div>
+            <div id="detectionsList">
+                <div class="no-data">Click "Start Detection" to begin scanning...</div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // Map initialization
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let userMarker = null;
+        let currentLat = null;
+        let currentLng = null;
+
+        // Aircraft markers layer
+        let aircraftLayer = L.layerGroup().addTo(map);
+        const planeIcon = L.divIcon({
+            html: '✈️',
+            className: 'aircraft-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        // Get HIGH ACCURACY GPS
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                currentLat = position.coords.latitude;
+                currentLng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
+
+                // Add user marker
+                if (userMarker) map.removeLayer(userMarker);
+                userMarker = L.marker([currentLat, currentLng]).addTo(map)
+                    .bindPopup(`<b>📍 Your Location</b><br>Accuracy: ${accuracy.toFixed(1)}m`).openPopup();
+
+                // Add accuracy circle
+                L.circle([currentLat, currentLng], {
+                    color: '#00d4ff',
+                    fillColor: '#00d4ff',
+                    fillOpacity: 0.1,
+                    radius: accuracy
+                }).addTo(map);
+
+                map.setView([currentLat, currentLng], 10);
+
+                document.getElementById('gpsInfo').innerHTML =
+                    `Lat: ${currentLat.toFixed(6)}, Lon: ${currentLng.toFixed(6)}, Accuracy: ±${accuracy.toFixed(1)}m`;
+
+                console.log(`GPS: ${currentLat}, ${currentLng}, Accuracy: ${accuracy}m`);
+
+                // Fetch nearby aircraft immediately
+                fetchNearbyAircraft();
+            }, (error) => {
+                console.error('GPS Error:', error);
+                document.getElementById('gpsInfo').innerHTML =
+                    '<span style="color: #ef4444;">⚠️ GPS permission denied or unavailable</span>';
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+
+            // Watch position for updates
+            navigator.geolocation.watchPosition((position) => {
+                currentLat = position.coords.latitude;
+                currentLng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
+
+                if (userMarker) {
+                    userMarker.setLatLng([currentLat, currentLng]);
+                    userMarker.setPopupContent(`<b>📍 Your Location</b><br>Accuracy: ${accuracy.toFixed(1)}m`);
+                }
+            }, null, { enableHighAccuracy: true, maximumAge: 0 });
+        }
+
+        // Initialize socket
+        const socket = io('http://localhost:5000');
+        let isDetecting = false;
+        let stream = null;
+        let frameInterval = null;
+
+        socket.on('connect', () => {
+            document.getElementById('statusDot').classList.add('connected');
+            document.getElementById('statusText').textContent = 'Connected';
+        });
+
+        socket.on('status', (data) => {
+            document.getElementById('sessionInfo').textContent = `Session: ${data.session_id}`;
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('statusDot').classList.remove('connected');
+            document.getElementById('statusText').textContent = 'Disconnected';
+        });
+
+        // === AIRCRAFT TRACKING (FlightRadar-style) ===
+        function fetchNearbyAircraft() {
+            if (currentLat !== null && currentLng !== null) {
+                socket.emit('get_nearby_aircraft', {
+                    latitude: currentLat,
+                    longitude: currentLng,
+                    radius: 250  // 50 nautical miles
+                });
+            }
+        }
+
+        // Auto-refresh aircraft every 30 seconds
+        setInterval(fetchNearbyAircraft, 30000);
+
+        socket.on('nearby_aircraft', (data) => {
+            // Clear old markers
+            aircraftLayer.clearLayers();
+
+            if (data.error) {
+                console.error('Aircraft fetch error:', data.error);
+                return;
+            }
+
+            const aircraft = data.aircraft || [];
+            console.log(`📡 Received ${aircraft.length} aircraft`);
+
+            // Add markers for each aircraft
+            aircraft.forEach(ac => {
+                if (ac.lat && ac.lon) {
+                    const marker = L.marker([ac.lat, ac.lon], { icon: planeIcon });
+
+                    // Popup with aircraft info
+                    const popup = `
+                        <div style="font-family: sans-serif; min-width: 200px;">
+                            <b style="font-size: 14px; color: #00d4ff;">✈️ ${ac.callsign || 'Unknown'}</b><br>
+                            <span style="font-size: 11px; color: #666;">
+                                Registration: ${ac.registration}<br>
+                                Type: ${ac.type}<br>
+                                Altitude: ${ac.altitude ? ac.altitude + ' ft' : 'N/A'}<br>
+                                Speed: ${ac.speed ? ac.speed + ' kt' : 'N/A'}<br>
+                                Heading: ${ac.track ? ac.track + '°' : 'N/A'}
+                            </span>
+                        </div>
+                    `;
+
+                    marker.bindPopup(popup);
+                    marker.addTo(aircraftLayer);
+                }
+            });
+
+            // Update info
+            if (aircraft.length > 0) {
+                const gpsInfo = document.getElementById('gpsInfo');
+                const baseInfo = gpsInfo.innerHTML.split('<br>')[0] || '';
+                gpsInfo.innerHTML = baseInfo + `<br><span style="color: #00d4ff;">✈️ ${aircraft.length} aircraft nearby</span>`;
+            }
+        });
+
+        // Frontend deduplication to prevent card spam
+        const recentDetections = new Map();
+        const CARD_COOLDOWN = 5000;
+
+        socket.on('detection_update', (detection) => {
+            const detectionKey = detection.object_type;
+            const now = Date.now();
+
+            if (recentDetections.has(detectionKey)) {
+                const lastTime = recentDetections.get(detectionKey);
+                if (now - lastTime < CARD_COOLDOWN) {
+                    return;
+                }
+            }
+
+            recentDetections.set(detectionKey, now);
+            addDetection(detection);
+        });
+
+        socket.on('annotated_frame', (data) => {
+            document.getElementById('liveFrame').src = data.frame;
+        });
+
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            const button = document.getElementById('startBtn');
+
+            if (!isDetecting) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'environment'
+                        }
+                    });
+
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.play();
+
+                    isDetecting = true;
+                    button.textContent = 'Stop Detection';
+                    button.classList.add('active');
+
+                    processFrames(video);
+                } catch (error) {
+                    alert('Camera permission denied! Please allow camera access.');
+                }
+            } else {
+                if (frameInterval) {
+                    clearInterval(frameInterval);
+                    frameInterval = null;
+                }
+                if (stream) stream.getTracks().forEach(track => track.stop());
+                isDetecting = false;
+                button.textContent = 'Start Detection';
+                button.classList.remove('active');
+                document.getElementById('liveFrame').src = '';
+            }
+        });
+
+        function processFrames(video) {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            frameInterval = setInterval(() => {
+                if (!isDetecting || !video.videoWidth) return;
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+
+                const frameData = canvas.toDataURL('image/jpeg', 0.7);
+                if (frameData && frameData.length > 100) {
+                    socket.emit('process_frame', { frame: frameData, timestamp: Date.now() });
+                }
+            }, 200);
+        }
+
+        function addDetection(detection) {
+            const list = document.getElementById('detectionsList');
+            const count = document.getElementById('detectionCount');
+
+            if (list.querySelector('.no-data')) list.innerHTML = '';
+
+            const card = document.createElement('div');
+            card.className = 'detection-card';
+
+            const verifiedStatus = detection.verified ?
+                '<span class="verified">✅ Verified</span>' :
+                '<span class="unverified">⚠️ Unverified</span>';
+
+            card.innerHTML = `
+                <div class="detection-header">
+                    <span class="object-name">${detection.object_type}</span>
+                    <span class="threat-badge threat-${detection.threat_level}">
+                        ${detection.threat_level.toUpperCase()}
+                    </span>
+                </div>
+                <div class="detection-info">
+                    ${verifiedStatus}<br>
+                    ${detection.flight_number || 'Unknown Flight'}<br>
+                    Confidence: ${Math.round(detection.confidence * 100)}%<br>
+                    <small>${new Date(detection.timestamp).toLocaleTimeString()}</small>
+                </div>
+            `;
+
+            list.insertBefore(card, list.firstChild);
+            while (list.children.length > 8) list.removeChild(list.lastChild);
+            count.textContent = list.children.length;
+        }
+    </script>
+</body>
+
+</html>
