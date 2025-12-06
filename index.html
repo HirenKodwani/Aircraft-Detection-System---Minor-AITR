@@ -355,8 +355,8 @@
             }, null, { enableHighAccuracy: true, maximumAge: 0 });
         }
 
-        // Initialize socket
-        const socket = io('http://localhost:5000');
+        // Initialize socket - auto-detect server URL for mobile/deployed compatibility
+        const socket = io();
         let isDetecting = false;
         let stream = null;
         let frameInterval = null;
