@@ -18,13 +18,29 @@ from datetime import datetime
 
 app = Flask(__name__, static_folder='.', template_folder='.')
 
-# Auto-detect async mode: use gevent on Linux (Render), threading on Windows (local)
-if sys.platform.startswith('win'):
-    async_mode = 'threading'
-else:
-    async_mode = 'gevent'
+# Auto-detect best async mode for the platform
+def get_async_mode():
+    if sys.platform.startswith('win'):
+        return 'threading'
+    # On Linux (Render), try eventlet first, then gevent
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+        return 'eventlet'
+    except ImportError:
+        pass
+    try:
+        from gevent import monkey
+        monkey.patch_all()
+        return 'gevent'
+    except ImportError:
+        pass
+    return 'threading'
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
+async_mode = get_async_mode()
+print(f"[SERVER] Using async mode: {async_mode}")
+
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode, ping_timeout=60, ping_interval=25)
 
 # Initialize - Same as Camera module.py
 MODEL_PATH = "yolov8n.pt"
