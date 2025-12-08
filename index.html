@@ -474,6 +474,10 @@
             document.getElementById('liveFrame').src = data.frame;
         });
 
+        socket.on('frame_error', (data) => {
+            console.error('[FRAME ERROR]', data.error);
+        });
+
         document.getElementById('startBtn').addEventListener('click', async () => {
             const button = document.getElementById('startBtn');
 
@@ -519,15 +523,18 @@
             frameInterval = setInterval(() => {
                 if (!isDetecting || !video.videoWidth) return;
 
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
+                // Downscale for performance (critical for cloud)
+                const scale = 480 / video.videoWidth;
+                canvas.width = 480;
+                canvas.height = video.videoHeight * scale;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const frameData = canvas.toDataURL('image/jpeg', 0.7);
+                // Lower quality for speed (0.5 good for detection)
+                const frameData = canvas.toDataURL('image/jpeg', 0.5);
                 if (frameData && frameData.length > 100) {
                     socket.emit('process_frame', { frame: frameData, timestamp: Date.now() });
                 }
-            }, 200);
+            }, 333);
         }
 
         function addDetection(detection) {
@@ -566,3 +573,4 @@
 </body>
 
 </html>
+
