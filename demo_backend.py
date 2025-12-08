@@ -1,9 +1,16 @@
 """
-Demo Backend - Camera Module Logic for Website
-Brings Camera module.py features to localhost web interface
+Demo Backend - Camera Module Logic for Web Interface
+Brings Camera module.py features to web browser
 """
-import os
 import sys
+
+# Critical for Render/Gunicorn with Gevent worker
+# Must be done BEFORE other imports on non-Windows
+if sys.platform != 'win32':
+    from gevent import monkey
+    monkey.patch_all()
+
+import os
 
 # Fix for Render/cloud deployment - set writable config directories BEFORE imports
 os.environ['YOLO_CONFIG_DIR'] = '/tmp/ultralytics'
@@ -298,13 +305,18 @@ def handle_disconnect():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    host = '0.0.0.0'
     print("\n" + "=" * 60)
     print("   AIRCRAFT DETECTION - DEMO MODE")
     print("=" * 60)
     print(f"[OK] Model: {MODEL_PATH}")
+    print(f"[OK] Host: {host}")
     print(f"[OK] Port: {port}")
     print(f"[OK] Async Mode: {async_mode}")
-    print(f"[OK] URL: http://localhost:{port}")
+    if os.environ.get('PORT'):
+        print(f"[OK] Running on Render (Cloud)")
+    else:
+        print(f"[OK] Running locally - http://localhost:{port}")
     print("=" * 60 + "\n")
     
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
