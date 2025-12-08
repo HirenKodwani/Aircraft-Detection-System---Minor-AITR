@@ -174,16 +174,30 @@ def handle_get_nearby_aircraft(data):
 def handle_process_frame(data):
     """Process frame - Camera module.py logic"""
     try:
-        # Decode frame
-        frame_data = data['frame'].split(',')[1]
+        print(f"[FRAME] Received frame from client")
+        
+        # Decode frame with validation
+        if 'frame' not in data:
+            print("[ERROR] No frame data received")
+            return
+            
+        frame_parts = data['frame'].split(',')
+        if len(frame_parts) < 2:
+            print("[ERROR] Invalid frame format")
+            return
+            
+        frame_data = frame_parts[1]
         frame_bytes = base64.b64decode(frame_data)
         nparr = np.frombuffer(frame_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if frame is None:
+            print("[ERROR] Failed to decode frame")
             return
+            
+        print(f"[FRAME] Decoded successfully - size: {frame.shape}")
         
-        # Sky check
+        # Sky check (lightweight)
         sky_ratio = estimate_sky_ratio(frame)
         sky_ok = sky_ratio >= SKY_RATIO_THRESHOLD
         
@@ -193,109 +207,136 @@ def handle_process_frame(data):
                 'message': f'Sky coverage: {sky_ratio*100:.1f}% - Point camera at sky'
             })
         
-        # Run YOLO
-        model = get_model()
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = model.predict(source=rgb_frame, verbose=False, conf=CONF_THRESHOLD, imgsz=640, max_det=10)
-        
         detections = []
         annotated_frame = frame.copy()
         
-        # Draw overlays
+        # Add sky overlay
         cv2.putText(annotated_frame, f"Sky: {sky_ratio*100:.1f}%", (20, 40),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0) if sky_ok else (0, 0, 255), 2)
         
-        if len(results) > 0:
-            result = results[0]
-            boxes = result.boxes
+        # Run YOLO with cloud optimization
+        try:
+            model = get_model()
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            if boxes is not None:
-                for box in boxes:
-                    conf = float(box.conf.cpu().numpy())
-                    cls_idx = int(box.cls.cpu().numpy())
-                    cls_name = model.names.get(cls_idx, str(cls_idx)).lower()
-                    
-                    # Filter aircraft only
-                    if not any(ac in cls_name for ac in AIRCRAFT_CLASSES):
-                        continue
-                    
-                    # Deduplication
-                    detection_key = f"{cls_name}_{int(conf*100)}"
-                    current_time = datetime.now()
-                    if detection_key in last_detection_time:
-                        time_diff = (current_time - last_detection_time[detection_key]).total_seconds()
-                        if time_diff < DETECTION_COOLDOWN:
+            # Cloud-optimized: smaller image size, faster inference
+            is_cloud = os.environ.get('PORT') is not None
+            imgsz = 320 if is_cloud else 640  # Smaller for cloud speed
+            
+            print(f"[YOLO] Running inference (imgsz={imgsz})...")
+            results = model.predict(source=rgb_frame, verbose=False, conf=CONF_THRESHOLD, 
+                                  imgsz=imgsz, max_det=5)  # Reduced max_det for speed
+            print(f"[YOLO] Inference complete")
+            
+            if len(results) > 0:
+                result = results[0]
+                boxes = result.boxes
+                
+                if boxes is not None:
+                    for box in boxes:
+                        conf = float(box.conf.cpu().numpy())
+                        cls_idx = int(box.cls.cpu().numpy())
+                        cls_name = model.names.get(cls_idx, str(cls_idx)).lower()
+                        
+                        # Filter aircraft only
+                        if not any(ac in cls_name for ac in AIRCRAFT_CLASSES):
                             continue
-                    
-                    last_detection_time[detection_key] = current_time
-                    
-                    xyxy = box.xyxy[0].cpu().numpy()
-                    x1, y1, x2, y2 = map(int, xyxy)
-                    
-                    # Process with backend
-                    engine = get_engine()
-                    enhanced = engine.process_detection({
-                        'bbox': xyxy,
-                        'conf': conf,
-                        'class': cls_name,
-                        'timestamp': current_time,
-                        'frame_number': data.get('timestamp', 0)
-                    })
-                    
-                    # Color by threat level
-                    colors = {
-                        'none': (0, 255, 0),
-                        'medium': (0, 255, 255),
-                        'high': (0, 165, 255),
-                        'critical': (0, 0, 255)
-                    }
-                    color = colors.get(enhanced['threat_level'], (0, 255, 0))
-                    
-                    # Draw bounding box
-                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 3)
-                    
-                    # Label
-                    label = f"{cls_name} {conf:.2f}"
-                    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                    cv2.rectangle(annotated_frame, (x1, y1 - th - 10), (x1 + tw, y1), color, -1)
-                    cv2.putText(annotated_frame, label, (x1, y1 - 6), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-                    
-                    # Threat badge
-                    threat_text = f"THREAT: {enhanced['threat_level'].upper()}"
-                    cv2.putText(annotated_frame, threat_text, (x1, y2 + 25),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                    
-                    detections.append({
-                        'object_type': cls_name.upper(),
-                        'confidence': conf,
-                        'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
-                        'threat_level': enhanced['threat_level'],
-                        'verified': enhanced['verified'],
-                        'flight_number': enhanced.get('flight_number'),
-                        'timestamp': current_time.isoformat()
-                    })
-                    
-                    print(f"[DETECT] {cls_name.upper()} | {conf:.0%} | {enhanced['threat_level'].upper()}")
+                        
+                        # Deduplication
+                        detection_key = f"{cls_name}_{int(conf*100)}"
+                        current_time = datetime.now()
+                        if detection_key in last_detection_time:
+                            time_diff = (current_time - last_detection_time[detection_key]).total_seconds()
+                            if time_diff < DETECTION_COOLDOWN:
+                                continue
+                        
+                        last_detection_time[detection_key] = current_time
+                        
+                        xyxy = box.xyxy[0].cpu().numpy()
+                        x1, y1, x2, y2 = map(int, xyxy)
+                        
+                        # Process with backend
+                        engine = get_engine()
+                        enhanced = engine.process_detection({
+                            'bbox': xyxy,
+                            'conf': conf,
+                            'class': cls_name,
+                            'timestamp': current_time,
+                            'frame_number': data.get('timestamp', 0)
+                        })
+                        
+                        # Color by threat level
+                        colors = {
+                            'none': (0, 255, 0),
+                            'medium': (0, 255, 255),
+                            'high': (0, 165, 255),
+                            'critical': (0, 0, 255)
+                        }
+                        color = colors.get(enhanced['threat_level'], (0, 255, 0))
+                        
+                        # Draw bounding box
+                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 3)
+                        
+                        # Label
+                        label = f"{cls_name} {conf:.2f}"
+                        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                        cv2.rectangle(annotated_frame, (x1, y1 - th - 10), (x1 + tw, y1), color, -1)
+                        cv2.putText(annotated_frame, label, (x1, y1 - 6), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+                        
+                        # Threat badge
+                        threat_text = f"THREAT: {enhanced['threat_level'].upper()}"
+                        cv2.putText(annotated_frame, threat_text, (x1, y2 + 25),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        
+                        detections.append({
+                            'object_type': cls_name.upper(),
+                            'confidence': conf,
+                            'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
+                            'threat_level': enhanced['threat_level'],
+                            'verified': enhanced['verified'],
+                            'flight_number': enhanced.get('flight_number'),
+                            'timestamp': current_time.isoformat()
+                        })
+                        
+                        print(f"[DETECT] {cls_name.upper()} | {conf:.0%} | {enhanced['threat_level'].upper()}")
+        
+        except Exception as yolo_error:
+            print(f"[YOLO ERROR] {yolo_error}")
+            # Continue with non-annotated frame
         
         # Send detections
         if detections:
             for det in detections:
                 emit('detection_update', det, broadcast=True)
         
-        # Send annotated frame
-        _, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-        annotated_b64 = base64.b64encode(buffer).decode('utf-8')
-        emit('annotated_frame', {
-            'frame': f'data:image/jpeg;base64,{annotated_b64}',
-            'detections_count': len(detections),
-            'sky_ok': sky_ok
-        })
+        # Send annotated frame with optimized quality
+        try:
+            # Lower JPEG quality on cloud for speed
+            quality = 60 if os.environ.get('PORT') else 75
+            _, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            annotated_b64 = base64.b64encode(buffer).decode('utf-8')
+            
+            emit('annotated_frame', {
+                'frame': f'data:image/jpeg;base64,{annotated_b64}',
+                'detections_count': len(detections),
+                'sky_ok': sky_ok
+            })
+            print(f"[FRAME] Sent annotated frame (detections: {len(detections)})")
+            
+        except Exception as encode_error:
+            print(f"[ENCODE ERROR] {encode_error}")
         
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[ERROR] Frame processing failed: {e}")
         import traceback
         traceback.print_exc()
+        # Send error frame indicator
+        try:
+            emit('frame_error', {'error': str(e)})
+        except:
+            pass
+
 
 
 @socketio.on('disconnect')
