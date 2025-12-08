@@ -355,15 +355,18 @@
             }, null, { enableHighAccuracy: true, maximumAge: 0 });
         }
 
-        // Initialize socket - use polling first for cloud compatibility
+        // Initialize socket - polling first for cloud compatibility, then upgrade
         const socket = io({
-            transports: ['polling', 'websocket'],
-            upgrade: true,
+            transports: ['polling', 'websocket'],  // Start with polling (more reliable on cloud)
+            upgrade: true,                          // Upgrade to websocket when possible
             forceNew: true,
             reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-            timeout: 20000
+            reconnectionAttempts: 20,               // More attempts for cloud
+            reconnectionDelay: 2000,                // Longer delay for cloud stability
+            reconnectionDelayMax: 10000,
+            timeout: 30000,                         // Longer timeout for cloud cold starts
+            pingInterval: 25000,
+            pingTimeout: 60000
         });
         let isDetecting = false;
         let stream = null;
