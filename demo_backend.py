@@ -18,9 +18,14 @@ from datetime import datetime
 
 app = Flask(__name__, static_folder='.', template_folder='.')
 
-# Use threading async mode - most compatible, gunicorn handles the rest
-async_mode = 'threading'
-print(f"[SERVER] Using async mode: {async_mode}")
+# Platform-aware async mode:
+# - Windows (local dev): use 'threading' (gevent doesn't work well)
+# - Linux (Render/cloud): use 'gevent' (required for WebSocket with Gunicorn)
+if sys.platform == 'win32':
+    async_mode = 'threading'
+else:
+    async_mode = 'gevent'
+print(f"[SERVER] Platform: {sys.platform}, async_mode: {async_mode}")
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode, 
                     ping_timeout=60, ping_interval=25, 
