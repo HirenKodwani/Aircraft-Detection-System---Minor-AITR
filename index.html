@@ -536,13 +536,14 @@
                 }
 
                 // Downscale for performance (critical for cloud)
-                const scale = 480 / video.videoWidth;
-                canvas.width = 480;
+                // 320px is the sweet spot for OOM prevention on 512MB RAM
+                const scale = 320 / video.videoWidth;
+                canvas.width = 320;
                 canvas.height = video.videoHeight * scale;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Lower quality for speed (0.5 good for detection)
-                const frameData = canvas.toDataURL('image/jpeg', 0.5);
+                // Lower quality for speed (0.4)
+                const frameData = canvas.toDataURL('image/jpeg', 0.4);
 
                 if (frameData && frameData.length > 100) {
                     // Log every ~50 frames (approx every 15s) to confirm sending
