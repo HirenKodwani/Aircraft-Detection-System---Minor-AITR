@@ -520,8 +520,20 @@
             const canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
 
+            socket.emit('debug_log', { message: 'Starting processFrames loop' });
+            console.log('Starting processing loop');
+
             frameInterval = setInterval(() => {
-                if (!isDetecting || !video.videoWidth) return;
+                if (!isDetecting) return;
+
+                if (!video.videoWidth) {
+                    // Log once every 5 seconds if video is not ready
+                    if (Date.now() % 5000 < 350) {
+                        console.warn('Video not ready yet');
+                        socket.emit('debug_log', { message: 'Video width is 0 - waiting for stream' });
+                    }
+                    return;
+                }
 
                 // Downscale for performance (critical for cloud)
                 const scale = 480 / video.videoWidth;
@@ -531,8 +543,15 @@
 
                 // Lower quality for speed (0.5 good for detection)
                 const frameData = canvas.toDataURL('image/jpeg', 0.5);
+
                 if (frameData && frameData.length > 100) {
+                    // Log every ~50 frames (approx every 15s) to confirm sending
+                    if (Math.random() < 0.02) {
+                        socket.emit('debug_log', { message: `Sending frame (${Math.round(frameData.length / 1024)}KB)` });
+                    }
                     socket.emit('process_frame', { frame: frameData, timestamp: Date.now() });
+                } else {
+                    socket.emit('debug_log', { message: 'Frame data empty' });
                 }
             }, 333);
         }
@@ -573,4 +592,3 @@
 </body>
 
 </html>
-

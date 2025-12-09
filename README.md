@@ -13,7 +13,8 @@ Real-time aircraft detection using YOLOv8 + Browser camera with FlightRadar-styl
 ```bash
 pip install -r requirements.txt
 python demo_backend.py
-# Open http://localhost:5000
+# For local development: Open http://localhost:5000
+# For Render deployment: Access your Render URL
 ```
 
 ## Deploy to Render (Free)

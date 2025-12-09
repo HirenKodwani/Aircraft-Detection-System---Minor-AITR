@@ -12,7 +12,14 @@ if sys.platform != 'win32':
 
 import os
 
-# Fix for Render/cloud deployment - set writable config directories BEFORE imports
+# Create writable directories for Render
+import os
+try:
+    os.makedirs('/tmp/ultralytics', exist_ok=True)
+    os.makedirs('/tmp/matplotlib', exist_ok=True)
+except:
+    pass
+
 os.environ['YOLO_CONFIG_DIR'] = '/tmp/ultralytics'
 os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
 
@@ -337,6 +344,12 @@ def handle_process_frame(data):
         except:
             pass
 
+
+
+@socketio.on('debug_log')
+def handle_debug_log(data):
+    """Receive debug logs from client"""
+    print(f"[CLIENT LOG] {data.get('message')}")
 
 
 @socketio.on('disconnect')
