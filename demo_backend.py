@@ -334,11 +334,22 @@ def handle_process_frame(data):
         except Exception as encode_error:
             print(f"[ENCODE ERROR] {encode_error}")
         
+        # Explicit cleanup to prevent OOM
+        del frame
+        del annotated_frame
+        del buffer
+        if 'rgb_frame' in locals(): del rgb_frame
+        # Force garbage collection on cloud to stay within 512MB
+        if os.environ.get('PORT'):
+            import gc
+            gc.collect()
+            
     except Exception as e:
         print(f"[ERROR] Frame processing failed: {e}")
         import traceback
         traceback.print_exc()
-        # Send error frame indicator
+        import gc
+        gc.collect()
         try:
             emit('frame_error', {'error': str(e)})
         except:
@@ -374,3 +385,6 @@ if __name__ == '__main__':
     print("=" * 60 + "\n")
     
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+
