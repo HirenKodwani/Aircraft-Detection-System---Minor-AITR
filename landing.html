@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AERIES - ACCESS CONTROL</title>
+    <style>
+        :root {
+            --bg: #050a0f;
+            --grid: #1a2634;
+            --primary: #00ff41;
+            /* Matrix/HUD Green */
+            --secondary: #0ea5e9;
+            /* Sky Blue */
+            --alert: #ef4444;
+            --text: #e2e8f0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        /* Animated Grid Background */
+        .grid-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.3;
+            z-index: -1;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        /* Radar Animation */
+        .radar-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            margin-bottom: 2rem;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            background: radial-gradient(circle, rgba(0, 255, 65, 0.1) 0%, transparent 70%);
+        }
+
+        .radar-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary));
+            transform-origin: 0 0;
+            animation: radar-spin 4s linear infinite;
+        }
+
+        @keyframes radar-spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Content */
+        .content {
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0;
+            letter-spacing: 0.5rem;
+            text-shadow: 0 0 10px var(--secondary);
+            color: var(--text);
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--secondary);
+            letter-spacing: 0.2rem;
+            margin-bottom: 3rem;
+            text-transform: uppercase;
+        }
+
+        .btn {
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 1rem 3rem;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.1rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: 0 0 20px var(--primary);
+        }
+
+        .status-panel {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .blink {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0;
+            }
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--secondary);
+            transition: all 0.5s;
+        }
+
+        .tl {
+            top: 20px;
+            left: 20px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .tr {
+            top: 20px;
+            right: 20px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .bl {
+            bottom: 20px;
+            left: 20px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .br {
+            bottom: 20px;
+            right: 20px;
+            border-left: none;
+            border-top: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="grid-bg"></div>
+
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <div class="content">
+        <div class="radar-container">
+            <div class="radar-line"></div>
+        </div>
+
+        <h1>AERIES</h1>
+        <div class="subtitle">Aerial Recognition & Intelligence System</div>
+
+        <button class="btn" onclick="window.location.href='/dashboard'">Initialize System</button>
+    </div>
+
+    <div class="status-panel">
+        <div>SYSTEM STATUS: <span style="color: var(--primary)">ONLINE</span></div>
+        <div>SECURE CONNECTION: <span style="color: var(--primary)">ESTABLISHED</span></div>
+        <div style="margin-top: 0.5rem;">AWAITING OPERATOR INPUT<span class="blink">_</span></div>
+    </div>
+
+</body>
+
+</html>
