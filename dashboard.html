@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AERIES - TACTICAL DASHBOARD</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b1116;
+            --panel: #111b24;
+            --border: #1e2d3b;
+            --primary: #00ff41;
+            --accent: #00f0ff;
+            --text: #cbd5e1;
+            --alert: #ff3333;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', 'Monaco', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: var(--panel);
+            border-bottom: 2px solid var(--border);
+            padding: 0.5rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            letter-spacing: 0.1rem;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .indicator {
+            width: 10px;
+            height: 10px;
+            background: #333;
+            border-radius: 50%;
+        }
+
+        .indicator.on {
+            background: var(--primary);
+            box-shadow: 0 0 8px var(--primary);
+        }
+
+        .main-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 450px 1fr;
+            gap: 0;
+        }
+
+        .sidebar {
+            background: var(--panel);
+            border-right: 2px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+            overflow-y: auto;
+        }
+
+        .panel-box {
+            border: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-title {
+            background: var(--border);
+            color: var(--accent);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .camera-container {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--primary);
+        }
+
+        #liveFrame {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: rgba(0, 255, 65, 0.3);
+        }
+
+        .btn.active {
+            background: var(--primary);
+            color: #000;
+        }
+
+        .detections-list {
+            flex: 1;
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+            padding-top: 0.5rem;
+            max-height: 400px;
+        }
+
+        .detection-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid #333;
+            font-size: 0.85rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #050a0f;
+        }
+
+        .leaflet-tile {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .aircraft-marker {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2300f0ff"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>');
+            width: 32px;
+            height: 32px;
+            background-size: contain;
+            filter: drop-shadow(0 0 5px rgba(0, 240, 255, 0.7));
+        }
+
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="brand">AERIES <span style="font-size:0.8rem; color:var(--text); font-weight:normal;">| TACTICAL
+                v2.0</span></div>
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="indicator" id="conn-ind"></div>
+                <span id="conn-text">DISCONNECTED</span>
+            </div>
+            <div class="status-item">
+                <div class="indicator" id="gps-ind"></div>
+                <span id="gps-text">NO SIGNAL</span>
+            </div>
+            <div class="status-item" style="color:var(--text)">
+                <span id="clock">00:00:00 UTC</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="panel-box">
+                <div class="panel-title">
+                    <span>OPTICAL SENSOR</span>
+                </div>
+                <div class="camera-container">
+                    <img id="liveFrame" src="" alt="NO SIGNAL">
+                </div>
+                <div style="padding: 10px;">
+                    <button id="startBtn" class="btn">INITIALIZE CAMERA</button>
+                    <div id="cam-status" style="margin-top:5px; font-size:0.7rem; color:#666; text-align:center;">SYSTEM
+                        STANDBY</div>
+                </div>
+            </div>
+
+            <div class="panel-box" style="flex:1; display:flex; flex-direction:column;">
+                <div class="panel-title">
+                    <span>TARGET FEED</span>
+                    <span id="det-count">0</span>
+                </div>
+                <div id="detectionsList" class="detections-list">
+                    <div style="padding:1rem; text-align:center; color:#444; font-size:0.8rem;">
+                        NO ACTIVE TARGETS
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        console.log('[INIT] Starting AERIES Dashboard...');
+
+        // Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toISOString().split('T')[1].split('.')[0] + ' UTC';
+        }, 1000);
+
+        // Map Setup
+        console.log('[MAP] Initializing Leaflet map...');
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView([20, 0], 2);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        console.log('[MAP] Map initialized successfully');
+
+        const aircraftLayer = L.layerGroup().addTo(map);
+        let userMarker = null;
+        let currentPos = { lat: null, lon: null };
+
+        // Socket.IO
+        console.log('[SOCKET] Connecting to backend...');
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            reconnection: true
+        });
+
+        const connInd = document.getElementById('conn-ind');
+        const connText = document.getElementById('conn-text');
+
+        socket.on('connect', () => {
+            console.log('[SOCKET] Connected!');
+            connInd.className = 'indicator on';
+            connText.textContent = 'LINK ESTABLISHED';
+            connText.style.color = 'var(--primary)';
+        });
+
+        socket.on('disconnect', () => {
+            console.log('[SOCKET] Disconnected!');
+            connInd.className = 'indicator';
+            connText.textContent = 'LINK LOST';
+            connText.style.color = 'var(--alert)';
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error('[SOCKET] Connection error:', err);
+        });
+
+        // Camera Logic
+        const liveFrame = document.getElementById('liveFrame');
+        const startBtn = document.getElementById('startBtn');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const camStatus = document.getElementById('cam-status');
+
+        let isDetecting = false;
+        let videoEl = null;
+        let processInterval = null;
+        let stream = null;
+
+        startBtn.addEventListener('click', toggleCamera);
+
+        async function toggleCamera() {
+            console.log('[CAMERA] Toggle clicked. Current state:', isDetecting);
+            if (isDetecting) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        }
+
+        async function startCamera() {
+            try {
+                console.log('[CAMERA] Requesting user media...');
+                camStatus.textContent = "REQUESTING ACCESS...";
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "environment"
+                    }
+                });
+
+                console.log('[CAMERA] Stream acquired');
+                videoEl = document.createElement('video');
+                videoEl.srcObject = stream;
+                videoEl.play();
+
+                camStatus.textContent = "SENSOR ACTIVE - PROCESSING";
+                startBtn.textContent = "TERMINATE FEED";
+                startBtn.classList.add('active');
+                isDetecting = true;
+
+                processLoop();
+                console.log('[CAMERA] Processing loop started');
+
+            } catch (err) {
+                console.error('[CAMERA] Access error:', err);
+                camStatus.textContent = "ACCESS DENIED / ERROR";
+                alert("Camera access failed: " + err.message);
+            }
+        }
+
+        function stopCamera() {
+            console.log('[CAMERA] Stopping camera...');
+            if (processInterval) clearInterval(processInterval);
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            if (videoEl) videoEl = null;
+
+            liveFrame.src = "";
+            startBtn.textContent = "INITIALIZE CAMERA";
+            startBtn.classList.remove('active');
+            camStatus.textContent = "SYSTEM STANDBY";
+            isDetecting = false;
+        }
+
+        function processLoop() {
+            processInterval = setInterval(() => {
+                if (!videoEl || !videoEl.videoWidth) return;
+
+                const scale = 320 / videoEl.videoWidth;
+                canvas.width = 320;
+                canvas.height = videoEl.videoHeight * scale;
+                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+                const frameData = canvas.toDataURL('image/jpeg', 0.5);
+                console.log('[CAMERA] Emitting frame to server');
+                socket.emit('process_frame', { frame: frameData });
+
+            }, 100);
+        }
+
+        socket.on('annotated_frame', (data) => {
+            console.log('[CAMERA] Received annotated frame from server');
+            liveFrame.src = data.frame;
+
+            if (data.sky_ok === false) {
+                camStatus.textContent = "WARN: POINT TO SKY";
+                camStatus.style.color = "orange";
+            } else {
+                camStatus.textContent = "TARGET ACQUISITION ACTIVE";
+                camStatus.style.color = "#666";
+            }
+
+            if (data.detections && data.detections.length > 0) {
+                console.log(`[CAMERA] ${data.detections.length} detections`);
+                data.detections.forEach(det => {
+                    addDetection('CAM', det.class, det.confidence, det.threat);
+                });
+            }
+        });
+
+        // GPS & Aircraft
+        console.log('[GPS] Requesting geolocation...');
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                const { latitude, longitude, accuracy } = pos.coords;
+                currentPos = { lat: latitude, lon: longitude };
+
+                console.log(`[GPS] Location acquired: ${latitude}, ${longitude}`);
+                document.getElementById('gps-ind').className = 'indicator on';
+                document.getElementById('gps-text').textContent =
+                    `${latitude.toFixed(4)}N, ${longitude.toFixed(4)}E`;
+
+                if (!userMarker) {
+                    userMarker = L.circleMarker([latitude, longitude], {
+                        radius: 6,
+                        color: '#00ff41',
+                        fillColor: '#00ff41',
+                        fillOpacity: 1
+                    }).addTo(map);
+                    map.setView([latitude, longitude], 10);
+                } else {
+                    userMarker.setLatLng([latitude, longitude]);
+                }
+
+                fetchAircraft();
+            }, err => {
+                console.error('[GPS] Error:', err);
+                document.getElementById('gps-ind').className = 'indicator';
+                document.getElementById('gps-text').textContent = "SIGNAL LOST";
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        } else {
+            console.error('[GPS] Geolocation not supported');
+        }
+
+        function fetchAircraft() {
+            if (currentPos.lat) {
+                console.log('[AIRCRAFT] Fetching nearby aircraft...');
+                socket.emit('get_nearby_aircraft', {
+                    latitude: currentPos.lat,
+                    longitude: currentPos.lon,
+                    radius: 200
+                });
+            }
+        }
+
+        setInterval(fetchAircraft, 30000);
+
+        const aircraftIcon = L.divIcon({
+            className: 'aircraft-marker',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+
+        socket.on('nearby_aircraft', (data) => {
+            console.log('[AIRCRAFT] Received aircraft data:', data);
+            aircraftLayer.clearLayers();
+
+            if (data.aircraft && data.aircraft.length > 0) {
+                console.log(`[AIRCRAFT] Displaying ${data.aircraft.length} aircraft`);
+                data.aircraft.forEach(ac => {
+                    if (ac.lat && ac.lon) {
+                        // Create detailed popup matching screenshot
+                        const popupHTML = `
+                            <div style="background:#0a1520;color:#00f0ff;padding:10px;font-family:monospace;min-width:220px;border:1px solid #00f0ff;">
+                                <div style="color:#00ff41;font-weight:bold;margin-bottom:8px;border-bottom:1px solid #00f0ff;padding-bottom:4px;font-size:1rem;">
+                                    ✈ ${ac.callsign}
+                                </div>
+                                <div style="font-size:0.85rem;line-height:1.7;">
+                                    <div><span style="color:#00ff41;">Registration:</span> ${ac.registration}</div>
+                                    <div><span style="color:#00ff41;">Type:</span> ${ac.type}</div>
+                                    <div><span style="color:#00ff41;">Origin:</span> ${ac.origin}</div>
+                                    <div><span style="color:#00ff41;">Destination:</span> ${ac.destination}</div>
+                                    <div><span style="color:#00ff41;">Altitude:</span> ${ac.altitude} ft</div>
+                                    <div><span style="color:#00ff41;">Speed:</span> ${ac.speed} kt</div>
+                                    <div><span style="color:#00ff41;">Heading:</span> ${ac.track}°</div>
+                                </div>
+                            </div>
+                        `;
+
+                        L.marker([ac.lat, ac.lon], { icon: aircraftIcon })
+                            .bindPopup(popupHTML, { closeButton: true, maxWidth: 300 })
+                            .addTo(aircraftLayer);
+
+                        addDetection('MAP', ac.callsign, null, 'known', {
+                            alt: ac.altitude,
+                            spd: ac.speed
+                        });
+                    }
+                });
+            } else {
+                console.log('[AIRCRAFT] No aircraft found');
+            }
+        });
+
+        // Detections
+        const feedList = document.getElementById('detectionsList');
+        const MAX_ITEMS = 50;
+
+        function addDetection(source, label, conf, threat, extra = {}) {
+            if (feedList.innerText.includes("NO ACTIVE")) feedList.innerHTML = "";
+
+            const div = document.createElement('div');
+            div.className = 'detection-item';
+
+            const confStr = conf ? `${(conf * 100).toFixed(0)}%` : '';
+
+            div.innerHTML = `
+                <div>
+                    <span style="color:${source === 'CAM' ? '#00f0ff' : '#00ff41'}; font-weight:bold;">[${source}]</span>
+                    <span style="margin-left:5px;">${label.toUpperCase()}</span>
+                </div>
+                <div style="font-size:0.75rem; color:#888; margin-top:2px;">
+                    ${extra.alt ? `ALT: ${extra.alt}ft` : ''} 
+                    ${confStr ? `CONF: ${confStr}` : ''}
+                    ${threat ? `THREAT: ${threat.toUpperCase()}` : ''}
+                </div>
+            `;
+
+            feedList.insertBefore(div, feedList.firstChild);
+
+            if (feedList.children.length > MAX_ITEMS) {
+                feedList.removeChild(feedList.lastChild);
+            }
+
+            document.getElementById('det-count').textContent = feedList.children.length;
+        }
+
+        console.log('[INIT] Dashboard ready');
+    </script>
+</body>
+
+</html>
