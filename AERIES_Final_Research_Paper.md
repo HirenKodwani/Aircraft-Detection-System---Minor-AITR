@@ -4,7 +4,7 @@
 ### Authors
 **Hiren Kodwani**
 
-CSE-DS Department, Acropolis Institute of Technology and Research, Indore, M.P., India*
+CSE-DS Department, Acropolis Institute of Technology and Research, Indore, M.P., India
 
 ---
 
@@ -1784,6 +1784,3 @@ Aircraft-Detection-System/
 ---
 
 **End of Research Paper**
-
-*Manuscript submitted for publication, December 2025*
-*For correspondence: hiren.kodwani@[institution].ac.in*
