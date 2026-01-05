@@ -2,7 +2,7 @@
 ## With Integrated Software Implementation, Database Architecture, and User Interface Design
 
 ### Authors
-**Hiren Kodwani** $^{1*}$
+**Hiren Kodwani**
 *$^1$ CSE-DS Department, Acropolis Institute of Technology and Research, Indore, M.P., India*
 
 ---
