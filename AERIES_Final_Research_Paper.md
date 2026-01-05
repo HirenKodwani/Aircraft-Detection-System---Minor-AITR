@@ -3,7 +3,8 @@
 
 ### Authors
 **Hiren Kodwani**
-*$^1$ CSE-DS Department, Acropolis Institute of Technology and Research, Indore, M.P., India*
+
+CSE-DS Department, Acropolis Institute of Technology and Research, Indore, M.P., India*
 
 ---
 
