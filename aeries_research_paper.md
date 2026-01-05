@@ -1,4 +1,4 @@
-# AERIES: A Web-Based Hybrid Aircraft Detection and Tracking System Using Computer Vision and ADS-B Data Fusion
+# Web-Based Hybrid Aircraft Detection and Tracking System Using Computer Vision and ADS-B Data Fusion
 
 ## Abstract
 
